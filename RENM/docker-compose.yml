@@ -1,0 +1,76 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/app/.env
+    restart: on-failure
+    # container_name: backend
+    volumes:
+      - node-modules:/app/node_modules
+      - ./backend/app:/app
+    networks:
+      - app-network
+    depends_on:
+      - database
+
+  database:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    restart: on-failure
+    # container_name: database
+    ports:
+      - '${MONGO_DB_PORT}:${MONGO_DB_PORT_DEFAULT}'
+    volumes:
+      - database:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: on-failure
+    # container_name: frontend
+    volumes:
+      - ./frontend/app:/app
+    command: sh -c "npm install && npm run build && tail -f /dev/null"
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: on-failure
+    # container_name: proxy
+    ports:
+      - '${NGINX_PORT}:${NGINX_PORT}'
+      - '${NGINX_SSL_PORT}:${NGINX_SSL_PORT}'
+    volumes:
+      - ./frontend/app/dist:/usr/share/nginx/html:ro
+      - ./nginx/configs/default.conf:/etc/nginx/default.conf:ro
+    networks:
+      - app-network
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  database:
+    name: database
+    external: false
+  node-modules:
+    name: node-modules
+    external: false
+
+networks:
+  app-network:
+    driver: bridge
