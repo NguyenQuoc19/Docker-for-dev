@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/app/.env
+    restart: on-failure
+    # container_name: backend
+    volumes:
+      - node-modules:/app/node_modules
+      - ./backend/app:/app
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: on-failure
+    # container_name: frontend
+    volumes:
+      - ./frontend/app:/app
+    command: sh -c "npm install && npm run build && tail -f /dev/null"
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: on-failure
+    # container_name: proxy
+    ports:
+      - '${NGINX_PORT}:${NGINX_PORT}'
+      - '${NGINX_SSL_PORT}:${NGINX_SSL_PORT}'
+    volumes:
+      - ./frontend/app/dist:/usr/share/nginx/html:ro
+      - ./nginx/configs/default.conf:/etc/nginx/default.conf:ro
+    networks:
+      - app-network
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  sqlite-data:
+  node-modules:
+
+
+networks:
+  app-network:
+    driver: bridge
