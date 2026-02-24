@@ -1,0 +1,94 @@
+services:
+  db-mysql:
+    image: arm64v8/mysql:8.4
+    container_name: db-mysql
+    env_file:
+      - .env
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_USER: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db-mysql-data:/var/lib/mysql
+      - ./config/my-custom.cnf:/etc/mysql/conf.d/my-custom.cnf:ro
+    ports:
+      - "3333:3306"
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  db-phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: db-phpmyadmin
+    environment:
+      PMA_HOST: db-mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+      PHP_UPLOAD_SIZE: 512M
+      PHP_MAX_EXECUTION_TIME: 600
+      PMA_PMADB: ''
+      PMA_CONTROLUSER: ''
+      PMA_CONTROLPASS: ''
+      MAX_EXECUTION_TIME: 600000
+      MEMORY_LIMIT: 512M
+    volumes:
+      - ./config/phpmyadmin/sessions:/sessions
+    ports:
+      - "8334:80"
+    depends_on:
+      - db-mysql
+    networks:
+      - db-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  db-backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    container_name: db-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKUP_MODE: cron
+      TZ: Asia/Ho_Chi_Minh
+      ALLOWED_IP: ${ALLOWED_IP:-all}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-*/5 * * * *}
+      BACKUP_DATABASES: ${BACKUP_DATABASES:-${MYSQL_DATABASES}}
+    volumes:
+      - ./backups:/backups
+      - ./logs:/var/log
+    depends_on:
+      db-mysql:
+        condition: service_healthy
+    networks:
+      - db-network
+    ports:
+      - "${BACKUP_PORT:-}:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  db-mysql-data:
+    name: db-mysql-data
+
+networks:
+  db-network:
+    driver: bridge

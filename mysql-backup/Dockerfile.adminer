@@ -1,0 +1,8 @@
+FROM adminer:latest
+
+RUN mkdir -p /var/www/html && \
+    echo "<?php session_start(); \$_SESSION['adminer']['servers'][1]['db']='mysql'; ?>" > /var/www/html/servers.php
+
+EXPOSE 8080
+
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "/var/www/html"]
